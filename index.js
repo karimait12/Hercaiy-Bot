@@ -1,76 +1,57 @@
-const fs = require("fs");
+const express = require('express');
+const bodyParser = require('body-parser');
+const fs = require('fs-extra');
 const axios = require('axios');
-const login = require("@xaviabot/fca-unofficial");
-const bardai = require("./bardai.js");
-const server = require("./server.js");
-const util = require('util');
+const _ = require('lodash');
+const ytdl = require("ytdl-core");
+const yts = require("yt-search");
 
-server.server();
+const app = express();
+app.use(bodyParser.json());
 
-login({
-    appState: JSON.parse(fs.readFileSync('appstate.json', 'utf8'))
-}, (err, api) => {
-    if (err) {
-        console.error(err);
-        return;
+const { ASKBARD, Box, Pinterest, Menu, addUser, Imagene, Tik, Fbdl, song } = require('./bardi.js');
+
+// Webhook for Facebook Messenger
+app.post('/webhook', (req, res) => {
+    const body = req.body;
+    const message = body.message;
+    const senderId = body.sender.id;
+
+    if (message.startsWith('/bard')) {
+        const question = message.split('/bard')[1].trim();
+        ASKBARD(question, api, { threadID: senderId, messageID: body.messageId });
+    } else if (message.startsWith('/box')) {
+        const question = message.split('/box')[1].trim();
+        Box(question, api, { threadID: senderId, messageID: body.messageId });
+    } else if (message.startsWith('/pin')) {
+        const query = message.split('/pin')[1].trim();
+        Pinterest(query, api, { threadID: senderId, messageID: body.messageId });
+    } else if (message.startsWith('/menu')) {
+        Menu(api, { threadID: senderId, messageID: body.messageId });
+    } else if (message.startsWith('/addUser')) {
+        const userId = message.split('/addUser')[1].trim();
+        addUser(userId, api, { threadID: senderId, messageID: body.messageId });
+    } else if (message.startsWith('/imagene')) {
+        const prompt = message.split('/imagene')[1].trim();
+        Imagene(prompt, api, { threadID: senderId, messageID: body.messageId });
+    } else if (message.startsWith('/tik')) {
+        const url = message.split('/tik')[1].trim();
+        Tik(url, api, { threadID: senderId, messageID: body.messageId });
+    } else if (message.startsWith('/fbdl')) {
+        const url = message.split('/fbdl')[1].trim();
+        Fbdl(url, api, { threadID: senderId, messageID: body.messageId });
+    } else if (message.startsWith('/song')) {
+        const query = message.split('/song')[1].trim();
+        song(query, api, { threadID: senderId, messageID: body.messageId });
+    } else {
+        api.sendMessage("Unknown command. Type /menu for a list of commands.", senderId);
     }
 
-    api.setOptions({
-        listenEvents: true
-    });
+    res.status(200).send('OK');
+});
 
-    const stopListening = api.listen(async (err, event) => {
-        if (err) {
-            console.error(err);
-            return;
-        }
-
-        await api.markAsRead(event.threadID);
-        switch (event.type) {
-            case "message":
-                if (event.body === '/stop') {
-                    api.sendMessage("Goodbye…", event.threadID);
-                    stopListening();
-                    return;
-                } else if (event.body.startsWith('/bard')) {
-                    const question = event.body.replace('/bard', '');
-                    console.log(question);
-                    await bardai.ASKBARD(question, api, event);
-                } else if (event.body.startsWith('/box')) {
-                    const question = event.body.replace('/box', '');
-                    await bardai.Box(question, api, event)
-                } else if (event.body.startsWith('/pin')) {
-                    const question = event.body.replace('/pin', '');
-                    await bardai.Pinterest(question, api, event)
-                } else if (event.body.startsWith('/menu')) {
-                    const question = event.body.replace('/menu', '');
-                    await bardai.Menu(api, event)
-                } else if (event.body.startsWith('/addUser')) {
-                    const id = event.body.replace('/addUser', '');
-                    await bardai.addUser(id,api, event)
-                }else if (event.body.startsWith('/imagene')) {
-                    const q = event.body.replace('/imagene', '');
-                    await bardai.Imagene(q,api, event)
-                }else if (event.body.startsWith('/tik')) {
-                    const q = event.body.replace('/tik', '');
-                    await bardai.Tik(q,api, event)
-                }else if (event.body.startsWith('/fbdl')) {
-                    const q = event.body.replace('/fbdl', '');
-                    await bardai.Fbdl(q,api, event)
-                }else if (event.body.startsWith('/song')) {
-                    const q = event.body.replace('/song', '');
-                    await bardai.song(q,api, event)
-                }
-                    break;
-            case "message_request":
-                api.acceptMessageRequest(event.threadID, (acceptError, acceptResult) => {
-        if (!acceptError) {
-          console.log(`Accepted message request in thread: ${event.threadID}`);
-        } else {
-          console.error(`Error accepting message request: ${acceptError}`);
-        }
-      });
-                break;
-        }
-    });
+// Start the server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 });
